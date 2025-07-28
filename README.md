@@ -67,6 +67,9 @@ Use the dropdown at the bottom to instantly switch UI between English and Japane
 
 ---
 
+## 📷️ Demo
+<img width="865" height="753" alt="image" src="https://github.com/user-attachments/assets/8b5d0675-d3c9-408c-a7e2-dff2356e0b6e" />
+
 ## 💡 FAQ
 
 ### Q: Stealth mode is greyed out or unavailable?
