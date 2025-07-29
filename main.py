@@ -1,4 +1,3 @@
-
 import sys
 import threading
 import time
@@ -9,14 +8,53 @@ import keyboard
 import platform
 import subprocess
 import shutil
+import os
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QComboBox, QCheckBox,
     QPushButton, QHBoxLayout, QVBoxLayout, QSlider, QLineEdit,
-    QFrame, QGraphicsDropShadowEffect, QSizePolicy
+    QFrame, QGraphicsDropShadowEffect, QSizePolicy, QMessageBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QFont, QColor
+
+# --- 多重起動防止用 ---
+LOCKFILE = os.path.join(os.path.expanduser("~"), ".stayactive.lock")
+
+def obtain_lock():
+    # OS毎に排他ロック
+    if platform.system() == "Windows":
+        import msvcrt
+        try:
+            lockfile = open(LOCKFILE, "w")
+            msvcrt.locking(lockfile.fileno(), msvcrt.LK_NBLCK, 1)
+            return lockfile
+        except OSError:
+            return None
+    else:
+        import fcntl
+        try:
+            lockfile = open(LOCKFILE, "w")
+            fcntl.flock(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lockfile
+        except OSError:
+            return None
+
+def release_lock(lockfile):
+    if not lockfile:
+        return
+    try:
+        if platform.system() == "Windows":
+            import msvcrt
+            lockfile.seek(0)
+            msvcrt.locking(lockfile.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lockfile, fcntl.LOCK_UN)
+        lockfile.close()
+        os.remove(LOCKFILE)
+    except Exception:
+        pass
 
 # --- Multi-language Dictionary ---
 LANGS = ['日本語', 'English']
@@ -35,7 +73,8 @@ I18N = {
         'minimize': "最小化",
         'exit': "終了",
         'language': "言語 / Language",
-        'mode_unavailable': "（このOSではステルス非対応・カーソル移動のみ）"
+        'mode_unavailable': "（このOSではステルス非対応・カーソル移動のみ）",
+        'already_running': "StayActiveは既に起動中です。"
     },
     'English': {
         'title': "🔥StayActive",
@@ -51,7 +90,8 @@ I18N = {
         'minimize': "Minimize",
         'exit': "Exit",
         'language': "Language / 言語",
-        'mode_unavailable': "(Stealth is unavailable on this OS. Only cursor move works.)"
+        'mode_unavailable': "(Stealth is unavailable on this OS. Only cursor move works.)",
+        'already_running': "StayActive is already running."
     }
 }
 
@@ -134,7 +174,7 @@ class StayActiveApp(QWidget):
         self.lang = 'English'
         self.setWindowTitle(I18N[self.lang]['title'])
         self.setWindowIcon(QIcon())
-        self.setMinimumSize(560, 540)
+        self.setMinimumSize(500, 540)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.stealth_available = is_stealth_supported()
         self.patterns = [
@@ -271,7 +311,7 @@ class StayActiveApp(QWidget):
         h_btns.addStretch(1)
 
         layout = QVBoxLayout(self.main_frame)
-        layout.setContentsMargins(36, 28, 36, 24)
+        layout.setContentsMargins(30, 28, 30, 24)  # 横幅縮小
         layout.setSpacing(12)
         layout.addSpacing(14)
         layout.addWidget(self.title)
@@ -394,10 +434,26 @@ class StayActiveApp(QWidget):
         self.close()
 
 def main():
-    app = QApplication(sys.argv)
-    win = StayActiveApp()
-    win.show()
-    sys.exit(app.exec())
+    # --- 多重起動防止 ---
+    lockfile = obtain_lock()
+    if not lockfile:
+        lang = os.environ.get("STAYACTIVE_LANG", "English")
+        app = QApplication(sys.argv)
+        msg = QMessageBox()
+        msg.setWindowTitle("StayActive")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setText(I18N[lang]['already_running'])
+        msg.exec()
+        sys.exit(1)
+
+    try:
+        app = QApplication(sys.argv)
+        win = StayActiveApp()
+        win.show()
+        ret = app.exec()
+    finally:
+        release_lock(lockfile)
+    sys.exit(ret)
 
 if __name__ == "__main__":
     main()
