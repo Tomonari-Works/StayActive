@@ -6,7 +6,8 @@ import sys
 
 
 def main():
-    executable = Path(__file__).resolve().parents[1] / "dist" / "StayActive.exe"
+    root = Path(__file__).resolve().parents[1]
+    executable = (root / sys.argv[1]).resolve() if len(sys.argv) > 1 else root / "dist" / "StayActive.exe"
     if not executable.is_file():
         print("Missing executable:", executable)
         return 1
