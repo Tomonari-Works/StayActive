@@ -82,6 +82,47 @@ class UITests(unittest.TestCase):
         self.assertIn("Stop", self.window.start_button.text())
         self.backend.start.assert_called_once()
 
+    def test_quick_start_applies_complete_profile_and_starts_once(self):
+        self.window.quick_start_button.click()
+        self.assertEqual(self.controller.options, SessionOptions("cursor", 30, 0, True, False))
+        self.assertTrue(self.controller.running)
+        self.assertTrue(self.window.cursor_card.isChecked())
+        self.assertEqual(self.window.duration_spin.value(), 0)
+        self.assertEqual(self.window.interval_spin.value(), 30)
+        self.window.quick_start_button.click()
+        self.backend.start.assert_called_once_with(True)
+        self.cursor.pulse.assert_not_called()
+
+    def test_quick_start_switches_expiring_session_atomically(self):
+        self.window.duration_spin.setValue(1)
+        self.controller.clock = lambda: 100
+        self.controller.start()
+        self.controller.clock = lambda: 161
+        self.window.quick_start_button.click()
+        self.assertTrue(self.controller.running)
+        self.assertIsNone(self.controller.deadline)
+        self.assertEqual(self.controller.started_at, 100)
+        self.backend.stop.assert_not_called()
+
+    def test_input_diagnostic_is_localized_and_cleared_on_stop(self):
+        self.cursor.idle_seconds.return_value = 17.5
+        self.controller.start()
+        self.assertIn("17", self.window.input_status.text())
+        self.window.language_combo.setCurrentIndex(1)
+        self.assertIn("Windows input idle", self.window.input_status.text())
+        self.controller.stop()
+        self.assertIn("Measured after start", self.window.input_status.text())
+
+    def test_quick_start_is_unavailable_without_os_inhibition(self):
+        self.window.quick_available = False
+        self.window.quick_start()
+        self.assertFalse(self.controller.running)
+        self.backend.start.assert_not_called()
+        self.backend.available = False
+        self.window.cursor_card.click()
+        self.controller.start()
+        self.assertIn("OS 抑止なし", self.window.status.text())
+
     def test_button_stops_and_escape_stops(self):
         self.window.start_button.click()
         self.window.start_button.click()

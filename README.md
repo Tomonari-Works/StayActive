@@ -1,4 +1,4 @@
-# StayActive 2
+# StayActive 2.1
 
 集中している間、PC の自動スリープを抑止する小さなデスクトップアプリです。日本語 / English、ダーク / ライトに対応しています。設定とログは端末内に保存します。
 
@@ -11,6 +11,14 @@ Windows x64 向けは [最新リリースの StayActive.exe](https://github.com/
 旧版から更新するときは、起動中の StayActive を終了してから EXE を置き換えてください。2.0 では初期状態が「カーソルを動かさない」「60 分で自動停止」です。従来の移動なし入力信号は Windows の追加オプションとして選択できます。
 
 ソースをビルドした場合の出力先は `dist/StayActive.exe` です。`jiggler.bat` はこのファイルを優先して起動します。
+
+### Windows のかんたん開始
+
+開始ボタンの横の **「かんたん開始」** を押すと、カーソル微動・30 秒間隔・無制限・画面点灯をまとめて設定して開始します。30 秒以上入力がない場合だけごく小さくカーソルを往復させ、操作中・ドラッグ中は送信を待機します。再度押しても維持処理は重複しません。停止ボタン、`Ctrl+Alt+J`、アプリ内の `Esc` で停止できます。
+
+通常の開始ボタンは保存した設定を使います。起動時に自動で維持を開始することはありません。「かんたん開始」は Windows のスリープ抑止と入力送信の両方が利用できる場合に表示します。
+
+**「Windows の入力待機」** は、この Windows セッションで最後の入力から何秒経過したかを示します。開始後に約 1 秒ごとに更新し、入力内容や待機時間の履歴は保存・送信しません。この数値や送信回数は、他アプリのオンライン状態を検証した結果ではありません。
 
 ソースから起動する場合は、Python 3.10 以降の標準インストールを使ってください。
 
@@ -55,6 +63,21 @@ macOS / Linux では `.venv/bin/python` を使用します。Windows では PyQt
 
 アプリの対象は自動スリープの抑止です。画面ロック・スクリーンセーバー・チャットのオンライン表示は OS やサービスの仕様に依存します。旧版の「100% undetectable」「絶対に離席にならない」という説明は実装上保証できないため改めました。手動スリープや電源ボタン操作を妨げる機能はありません。
 
+### 常時アクティブにする方法の選び方
+
+| 方法 | 適している用途 | 限界 |
+| --- | --- | --- |
+| OS の電源設定 | アプリを常駐させず自動スリープを抑止 | 元の設定に戻す必要があり、操作中・在席表示は維持しない |
+| PowerToys Awake / StayActive の入力なしモード | 必要な間だけ、OS にスリープ抑止を要求 | 入力待機時間や他アプリの在席表示とは別 |
+| StayActive のかんたん開始 | スリープ抑止と OS の入力送信を一操作で併用 | Windows 用。マウスが微動し、UIPI・セッション・サービス独自の判定に依存 |
+| Web ページ | ページを表示している間の画面点灯維持 | 別タブ・最小化で Screen Wake Lock が解除される |
+| Chrome 拡張の power API | ブラウザー稼働中の自動スリープ抑止 | Windows の入力待機時間を更新する機能ではない |
+| 外付け入力デバイス | 対応環境で OS への入力を生成 | 機器の接続が必要。各アプリの独自在席判定まで保証しない |
+
+あらゆるアプリの在席状態を一律に制御する API はありません。例えば Slack の `users.setPresence` は `auto` / `away` の切り替えであり、`auto` は常時オンラインの固定ではありません。Teams は操作状況・会議・カレンダー・他端末も参照します。したがって、本アプリを含め「全アプリで必ずオンライン」を保証する方法として案内することはできません。
+
+仕様の参照先: [Microsoft PowerToys Awake](https://learn.microsoft.com/en-us/windows/powertoys/awake)、[Windows SendInput と UIPI](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)、[GetLastInputInfo](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getlastinputinfo)、[Chrome power](https://developer.chrome.com/docs/extensions/reference/api/power)、[Screen Wake Lock](https://www.w3.org/TR/screen-wake-lock/)、[Slack の在席設定](https://docs.slack.dev/reference/methods/users.setPresence/)、[Teams の在席判定](https://learn.microsoft.com/en-us/microsoftteams/presence-admins)。
+
 ## 設定とログ
 
 Windows の保存先は通常 `%LOCALAPPDATA%\TomonariWorks\StayActive` です。macOS / Linux では Qt のユーザー別アプリデータフォルダーを使用します。
@@ -70,7 +93,7 @@ Windows の保存先は通常 `%LOCALAPPDATA%\TomonariWorks\StayActive` です�
 .venv\Scripts\python main.py --smoke-test
 ```
 
-61 件の自動テストで、開始・停止の連打、遅延復帰、実行中の設定変更、タイマー満了、失敗時の解除、設定破損、翻訳、レイアウト、クラッシュ後のロック回復、ホットキーの競合と解除、公開用の認証ガードを検証します。テストから OS へマウス入力は送りません。OS 固有のテストは他の OS ではスキップします。
+70 件の自動テストで、開始・停止の連打、遅延復帰、実行中の設定変更、タイマー満了、失敗時の解除、設定破損、翻訳、レイアウト、クラッシュ後のロック回復、ホットキーの競合と解除、公開用の認証ガードを検証します。テストから OS へマウス入力は送りません。OS 固有のテストは他の OS ではスキップします。
 
 `--smoke-test` は一時フォルダーを使い、通常の設定を変更せず、起動・同梱 SVG の読み込み・正常終了を検証します。維持は開始しません。GitHub Actions には Windows / macOS / Ubuntu、Python 3.11 / 3.13 のテストを設定しています。ローカルでの確認内容は [CHANGELOG.md](CHANGELOG.md) に記載しています。
 

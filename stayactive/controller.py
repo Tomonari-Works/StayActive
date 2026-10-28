@@ -1,6 +1,7 @@
 """単一の Qt タイマーによるセッション制御。状態・期限は単調時計で管理する。"""
 
 import logging
+import math
 import time
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
@@ -28,6 +29,8 @@ class ActivityController(QObject):
         self.next_pulse = None
         self.elapsed = 0.0
         self.pulses = 0
+        self.input_idle_seconds = None
+        self._next_idle_sample = 0.0
         self.reason = "ready"
         self.timer = QTimer(self)
         self.timer.setInterval(250)
@@ -63,6 +66,8 @@ class ActivityController(QObject):
             self.elapsed, self.pulses = 0.0, 0
             self.reason = "running"
             self.running = True
+            self._next_idle_sample = 0.0
+            self._sample_input_idle(now)
             self.timer.start()
             self.changed.emit()
             return True
@@ -77,6 +82,7 @@ class ActivityController(QObject):
         self.running = False
         self.timer.stop()
         self.next_pulse = None
+        self.input_idle_seconds = None
         self.reason = reason
         try:
             self.backend.stop()
@@ -125,6 +131,7 @@ class ActivityController(QObject):
             return
         try:
             self.backend.check()
+            self._sample_input_idle(now)
             sends_input = self.options.mode == "cursor" or self.stationary_input
             if sends_input:
                 self.cursor.check_safety()
@@ -133,11 +140,28 @@ class ActivityController(QObject):
                         else self.cursor.pulse(self.options.interval_seconds))
                 if sent:
                     self.pulses += 1
+                    # SendInput の受理と OS が観測する待機時間は別。次の tick で再計測する。
+                    self._next_idle_sample = now
                 self.next_pulse = now + self.options.interval_seconds
         except Exception as exc:
             self._fail(exc)
             return
         self.changed.emit()
+
+    def _sample_input_idle(self, now):
+        if now < self._next_idle_sample:
+            return
+        self._next_idle_sample = now + 1.0
+        self.input_idle_seconds = None
+        if self.cursor.system != "Windows":
+            return
+        try:
+            value = self.cursor.idle_seconds()
+            if isinstance(value, (int, float)) and math.isfinite(value) and value >= 0:
+                self.input_idle_seconds = value
+        except Exception:
+            # 診断表示の失敗だけでスリープ抑止を解除しない。入力送信の失敗は pulse が扱う。
+            pass
 
     def _fail(self, exc):
         LOG.error("Session failed: %s", exc, exc_info=True)

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import math
 from pathlib import Path
 
-from PyQt6.QtCore import QByteArray, QPointF, QRectF, Qt, QTimer
+from PyQt6.QtCore import QByteArray, QPointF, QRectF, QSignalBlocker, Qt, QTimer
 from PyQt6.QtGui import QAction, QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QApplication, QBoxLayout, QButtonGroup, QCheckBox, QComboBox, QFrame, QHBoxLayout,
@@ -240,7 +240,17 @@ class StayActiveApp(QWidget):
         self.start_button.setObjectName("primary")
         self.start_button.setMinimumHeight(49)
         self.start_button.clicked.connect(self.toggle_session)
-        hero_layout.addWidget(self.start_button)
+        self.quick_start_button = QPushButton()
+        self.quick_start_button.setObjectName("quickStart")
+        self.quick_start_button.setMinimumHeight(49)
+        self.quick_available = (self.controller.cursor.system == "Windows"
+            and self.controller.cursor.available and self.controller.backend.available)
+        self.quick_start_button.setVisible(bool(self.quick_available))
+        self.quick_start_button.clicked.connect(self.quick_start)
+        actions = QHBoxLayout()
+        actions.addWidget(self.start_button, 1)
+        actions.addWidget(self.quick_start_button)
+        hero_layout.addLayout(actions)
         metrics = QHBoxLayout()
         self.metric_captions, self.metric_values = [], []
         for index in range(3):
@@ -259,6 +269,9 @@ class StayActiveApp(QWidget):
                 metrics.addWidget(line)
                 metrics.addSpacing(15)
         hero_layout.addLayout(metrics)
+        self.input_status = label("", "muted", True)
+        self.input_status.setVisible(self.controller.cursor.system == "Windows")
+        hero_layout.addWidget(self.input_status)
         self.dashboard.addWidget(self.hero, 1)
 
         self.alert = QFrame()
@@ -411,6 +424,10 @@ class StayActiveApp(QWidget):
 
     def translate(self):
         self.tagline.setText(self.tr("tagline"))
+        self.quick_start_button.setText(self.tr("quick_start"))
+        self.quick_start_button.setToolTip(self.tr("quick_hint"))
+        self.quick_start_button.setAccessibleDescription(self.tr("quick_hint"))
+        self.input_status.setToolTip(self.tr("input_idle_hint"))
         self.language_combo.setAccessibleName(self.tr("language"))
         self.language_combo.setToolTip(self.tr("language"))
         self.mode_heading.setText(self.tr("mode_section"))
@@ -455,7 +472,10 @@ class StayActiveApp(QWidget):
         controller = self.controller
         running = controller.running
         reason = "running" if running else controller.reason
-        self.status.setText("●  " + self.tr(reason))
+        status_key = reason
+        if running and (controller.options.mode == "cursor" or controller.stationary_input):
+            status_key = "running_input" if controller.backend.available else "running_cursor_only"
+        self.status.setText("●  " + self.tr(status_key))
         self.status.setProperty("error", reason == "error")
         headline = "hero_running" if running else "hero_error" if reason == "error" else "hero_done" if reason == "completed" else "hero_ready"
         hint = "running_hint" if running else "error_hint" if reason == "error" else "done_hint" if reason in ("completed", "stopped") else "ready_hint"
@@ -477,6 +497,10 @@ class StayActiveApp(QWidget):
         self.metric_values[0].setText(clock_text(controller.elapsed))
         self.metric_values[1].setText((datetime.now() + timedelta(seconds=controller.remaining)).strftime("%H:%M") if running and controller.remaining is not None else "—")
         self.metric_values[2].setText(str(controller.pulses) + self.tr("times"))
+        idle = controller.input_idle_seconds
+        idle_value = (str(int(idle)) + self.tr("seconds") if idle is not None
+            else self.tr("input_idle_unknown") if running else self.tr("input_idle_stopped"))
+        self.input_status.setText(self.tr("input_idle") + ": " + idle_value)
         self.interval_spin.setEnabled(controller.options.mode == "cursor" or controller.stationary_input)
         self.idle_checkbox.setEnabled(controller.options.mode == "quiet" and controller.cursor.available and controller.cursor.system == "Windows")
         self.metric_captions[2].setText(self.tr("signals" if controller.stationary_input else "movements"))
@@ -500,7 +524,7 @@ class StayActiveApp(QWidget):
             self.status.setProperty("active", running)
             self.status.style().unpolish(self.status)
             self.status.style().polish(self.status)
-        tooltip = "StayActive · " + self.tr(reason)
+        tooltip = "StayActive · " + self.tr(status_key)
         if running and controller.remaining is not None:
             tooltip += " · " + clock_text(math.ceil(controller.remaining))
         if tooltip != self._last_tooltip:
@@ -511,6 +535,25 @@ class StayActiveApp(QWidget):
         options = SessionOptions("quiet" if self.quiet_card.isChecked() else "cursor",
             self.interval_spin.value(), self.duration_spin.value(), self.display_checkbox.isChecked(), self.idle_checkbox.isChecked())
         self.controller.configure(options)
+        self.render_state()
+        self.queue_save()
+
+    def quick_start(self):
+        """入力＋スリープ抑止を明示的な一操作で開始。設定変更は一括で反映する。"""
+        if not self.quick_available:
+            return
+        controls = (self.quiet_card, self.cursor_card, self.duration_spin,
+            self.interval_spin, self.display_checkbox, self.idle_checkbox)
+        blockers = [QSignalBlocker(control) for control in controls]
+        self.cursor_card.setChecked(True)
+        self.duration_spin.setValue(0)
+        self.interval_spin.setValue(30)
+        self.display_checkbox.setChecked(True)
+        self.idle_checkbox.setChecked(False)
+        del blockers
+        self.alert.hide()
+        self.controller.configure(SessionOptions("cursor", 30, 0, True, False))
+        self.controller.start()
         self.render_state()
         self.queue_save()
 

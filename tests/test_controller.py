@@ -38,6 +38,40 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(self.controller.start())
         self.backend.start.assert_called_once_with(True)
 
+    def test_idle_diagnostic_samples_once_per_second_and_after_input(self):
+        self.cursor.system = "Windows"
+        self.cursor.idle_seconds.return_value = 14.5
+        self.configure(mode="cursor", interval_seconds=1)
+        self.controller.start()
+        self.assertEqual(self.controller.input_idle_seconds, 14.5)
+        self.advance(.25)
+        self.cursor.idle_seconds.assert_called_once()
+        self.advance(.75)
+        self.assertEqual(self.cursor.idle_seconds.call_count, 2)
+        self.cursor.idle_seconds.return_value = .25
+        self.advance(.25)
+        self.assertEqual(self.controller.input_idle_seconds, .25)
+        self.controller.stop()
+        self.assertIsNone(self.controller.input_idle_seconds)
+
+    def test_diagnostic_failure_does_not_cancel_power_request(self):
+        self.cursor.system = "Windows"
+        self.cursor.idle_seconds.side_effect = OSError("diagnostic unavailable")
+        self.assertTrue(self.controller.start())
+        self.advance(2)
+        self.assertTrue(self.controller.running)
+        self.assertIsNone(self.controller.input_idle_seconds)
+        self.backend.stop.assert_not_called()
+        self.assertFalse(self.errors)
+
+    def test_nonfinite_diagnostics_are_not_displayed(self):
+        self.cursor.system = "Windows"
+        for value in (float("nan"), float("inf"), -1):
+            self.cursor.idle_seconds.return_value = value
+            self.controller.start()
+            self.assertIsNone(self.controller.input_idle_seconds)
+            self.controller.stop()
+
     def test_rapid_stop_start_never_creates_extra_timer(self):
         self.configure(mode="cursor", interval_seconds=1)
         for _ in range(100):

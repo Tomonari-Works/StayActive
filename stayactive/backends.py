@@ -132,16 +132,21 @@ class CursorBackend:
             if point.x == 0 and point.y == 0:
                 raise BackendError("画面左上で緊急停止しました。 / Emergency stop at the top-left corner.")
 
+    def idle_seconds(self):
+        """この Windows セッションの入力待機時間。アプリの在席表示ではない。"""
+        if self.system != "Windows":
+            return None
+        last = _LastInputInfo(ctypes.sizeof(_LastInputInfo), 0)
+        if not self.user.GetLastInputInfo(ctypes.byref(last)):
+            raise BackendError("入力状態を取得できません。 / Could not read input state.")
+        return ((self.kernel.GetTickCount() - last.dwTime) & 0xFFFFFFFF) / 1000.0
+
     def pulse(self, idle_seconds: int, *, move=True) -> bool:
         if not self.available:
             raise BackendError("Wayland ではカーソル移動を利用できません。 / Cursor movement is unavailable on Wayland.")
         if self.system == "Windows":
             self.check_safety()
-            last = _LastInputInfo(ctypes.sizeof(_LastInputInfo), 0)
-            if not self.user.GetLastInputInfo(ctypes.byref(last)):
-                raise BackendError("入力状態を取得できません。 / Could not read input state.")
-            idle_ms = (self.kernel.GetTickCount() - last.dwTime) & 0xFFFFFFFF
-            if idle_ms < idle_seconds * 1000:
+            if self.idle_seconds() < idle_seconds:
                 return False
             if any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (1, 2, 4, 5, 6)):
                 return False
