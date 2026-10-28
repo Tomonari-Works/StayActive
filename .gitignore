@@ -201,6 +201,12 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# StayActive local verification artifacts (preferences and logs stay local).
+.artifacts/
+!StayActive.spec
+.idea/
+*.lnk
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
