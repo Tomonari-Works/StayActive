@@ -21,6 +21,7 @@ parser.add_argument("--language", choices=["ja", "en"], default="ja")
 parser.add_argument("--width", type=int, default=1000)
 parser.add_argument("--height", type=int, default=612)
 parser.add_argument("--running", action="store_true")
+parser.add_argument("--quick-start", action="store_true")
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 app = QApplication([])
@@ -35,11 +36,13 @@ with tempfile.TemporaryDirectory() as directory:
     store.save(SessionOptions(), args.language, args.theme, False)
     clock = [100.0]
     controller = ActivityController(backend=Mock(available=True, display_supported=True),
-        cursor=Mock(available=True, system="Windows"), clock=lambda: clock[0])
+        cursor=Mock(available=True, system="Windows", idle_seconds=Mock(return_value=12.0)), clock=lambda: clock[0])
     window = StayActiveApp(store, controller, integrations=False)
     window.show()
     window.resize(args.width, args.height)
-    if args.running:
+    if args.quick_start:
+        window.quick_start()
+    if args.running or args.quick_start:
         controller.start()
         clock[0] += 137
         controller.tick()

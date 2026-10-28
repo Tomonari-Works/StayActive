@@ -133,6 +133,22 @@ class WindowsTests(unittest.TestCase):
         self.assertFalse(cursor.pulse(30))
         cursor.user.SendInput.assert_not_called()
 
+    def test_idle_diagnostic_handles_tick_wraparound(self):
+        cursor = self.make_cursor()
+        cursor.kernel.GetTickCount.return_value = 20
+        def get_last(pointer):
+            pointer._obj.dwTime = 0xFFFFFFF0
+            return True
+        cursor.user.GetLastInputInfo.side_effect = get_last
+        self.assertAlmostEqual(cursor.idle_seconds(), .036)
+
+    def test_idle_diagnostic_reports_read_failure(self):
+        cursor = self.make_cursor()
+        cursor.user.GetLastInputInfo.side_effect = None
+        cursor.user.GetLastInputInfo.return_value = False
+        with self.assertRaises(BackendError):
+            cursor.idle_seconds()
+
     def test_cursor_waits_for_drag(self):
         cursor = self.make_cursor()
         cursor.user.GetAsyncKeyState.return_value = -32768
