@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from tools.public_github import APPROVED_ID, APPROVED_LOGIN, verify_identity, login_public_account, verify_outgoing_commits
+from tools.public_github import main
 
 
 def result(stdout="", code=0):
@@ -55,6 +56,15 @@ class PublicIdentityTests(unittest.TestCase):
         line = "\0".join(("TomonariWorks", email, "TomonariWorks", email))
         with patch("tools.public_github.subprocess.run", return_value=result(line)):
             verify_outgoing_commits("release/test")
+
+    def test_secret_output_command_is_blocked(self):
+        with patch("tools.public_github.sys.argv", ["public_github.py", "gh", "auth", "token"]), \
+                patch("tools.public_github.public_environment", return_value={}), \
+                patch("tools.public_github.verify_identity"), \
+                patch("tools.public_github.subprocess.run") as run:
+            with self.assertRaises(RuntimeError):
+                main()
+            run.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -109,7 +109,13 @@ def main():
     if command == "gh":
         if not args:
             raise RuntimeError("gh コマンドの引数が必要です。")
+        if args[0] == "auth" or "--show-token" in args:
+            raise RuntimeError("Use the wrapper's login/check commands for authentication. Secret-output commands are blocked.")
         return subprocess.run(["gh", *args], cwd=ROOT, env=env).returncode
+    if command == "fetch":
+        return subprocess.run(["git", "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
+            "fetch", "https://github.com/" + REPOSITORY + ".git", "+refs/heads/*:refs/remotes/origin/*",
+            "refs/tags/*:refs/tags/*"], cwd=ROOT, env=env).returncode
     if command == "push":
         if len(args) != 1 or args[0].startswith("-"):
             raise RuntimeError("push するブランチを 1 本指定してください。")
@@ -119,7 +125,7 @@ def main():
         return subprocess.run(["git", "-c", "credential.helper=", "-c",
             "credential.helper=!gh auth git-credential", "push", "https://github.com/" + REPOSITORY + ".git",
             args[0]], cwd=ROOT, env=env).returncode
-    raise RuntimeError("利用できる操作: check / login / gh / push")
+    raise RuntimeError("利用できる操作: check / login / gh / fetch / push")
 
 
 if __name__ == "__main__":
