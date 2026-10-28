@@ -99,7 +99,7 @@ $env:QT_QPA_PLATFORM = 'offscreen'
 既存 EXE を使用中の場合は、終了してからビルドするか、別の出力先を指定できます。
 
 ```powershell
-.\build.bat "" ".artifacts\release-candidate"
+.\build.bat python ".artifacts\release-candidate"
 ```
 
 `dist/`、`.venv/`、ログや個人設定は Git の対象外です。ビルドした EXE は未署名です。
